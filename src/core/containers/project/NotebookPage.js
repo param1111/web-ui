@@ -22,11 +22,12 @@ import { connect } from 'react-redux';
 import { withRouter } from 'react-router-dom'
 import { addFilteredCommand, copyCell, removeFilteredCommand } from '../../actions/main/App';
 import { createBranch, deleteBranch } from '../../actions/project/Branch';
-import { cancelWorkflowExecution, checkModuleStatus, createtNotebookCell,
+import { cancelWorkflowExecution, checkModuleStatus, createtNotebookCell,checkModuleStatusForSync,
     deleteNotebookCell, dismissCellChanges, fetchWorkflow,
     hideCellOutput, insertNotebookCell, replaceNotebookCell, showCellChart,
     selectNotebookCell, showCellDataset, showCellStdout, updateCellDatasetProperties,
-    showCellTimestamps, updateNotebookCellWithUpload, isCellOutputRequest } from '../../actions/project/Notebook';
+    showCellTimestamps, updateNotebookCellWithUpload, isCellOutputRequest,
+    freezeOrThawNotebookCell } from '../../actions/project/Notebook';
 import { showModuleSpreadsheet, fetchAnnotations, clearAnnotations } from '../../actions/project/Spreadsheet';
 import { fetchProject, setBranch } from '../../actions/project/Project';
 import { fetchProjects } from '../../actions/project/ProjectListing';
@@ -43,7 +44,10 @@ import { CONTENT_CHART, CONTENT_DATASET, CONTENT_HIDE, CONTENT_TEXT,
 import { branchPageUrl, isNotEmptyString, notebookPageUrl,
     NotebookResource, spreadsheetPageUrl } from '../../util/App';
 import { HATEOAS_MODULE_APPEND, HATEOAS_MODULE_INSERT,
-    HATEOAS_MODULE_REPLACE, HATEOAS_PROJECT_FILE_UPLOAD } from '../../util/HATEOAS';
+    HATEOAS_MODULE_REPLACE, HATEOAS_PROJECT_FILE_UPLOAD,
+    HATEOAS_MODULE_FREEZE, HATEOAS_MODULE_THAW,
+    HATEOAS_MODULE_FREEZE_ONE, HATEOAS_MODULE_THAW_ONE
+} from '../../util/HATEOAS';
 import '../../../css/App.css';
 import '../../../css/ProjectPage.css';
 import '../../../css/Chart.css';
@@ -75,6 +79,7 @@ class NotebookPage extends Component {
     constructor(props) {
         super(props);
         // Set the branch modal state
+        
         const copySupport = document.queryCommandSupported('copy');
         this.state = {modalOpen: false, modalTitle: 'New branch', moduleId: null, copySupport:copySupport};
         // Fetch any resources that are currently null or out of sync with the
@@ -248,6 +253,46 @@ class NotebookPage extends Component {
         dispatch(createtNotebookCell(notebook, cell, position));
     }
     /**
+     * Event handler when the user wants to freeze a cell and its successors.
+     */
+    handleFreezeCell = (cell) => {
+        // Cell has to be an existing workflow module cell. This should be
+        // ensured by the child component (not validated here).
+        const { dispatch, notebook } = this.props;
+        const url = cell.module.links.get(HATEOAS_MODULE_FREEZE)
+        dispatch(freezeOrThawNotebookCell(notebook, url, cell.id))
+    }
+    /**
+     * Event handler when the user wants to freeze a cell.
+     */
+    handleFreezeOneCell = (cell) => {
+        // Cell has to be an existing workflow module cell. This should be
+        // ensured by the child component (not validated here).
+        const { dispatch, notebook } = this.props;
+        const url = cell.module.links.get(HATEOAS_MODULE_FREEZE_ONE)
+        dispatch(freezeOrThawNotebookCell(notebook, url, cell.id))
+    }
+    /**
+     * Event handler when the user wants to thaw a cell and its successors.
+     */
+    handleThawCell = (cell) => {
+        // Cell has to be an existing workflow module cell. This should be
+        // ensured by the child component (not validated here).
+        const { dispatch, notebook } = this.props;
+        const url = cell.module.links.get(HATEOAS_MODULE_THAW)
+        dispatch(freezeOrThawNotebookCell(notebook, url, cell.id))
+    }
+    /**
+     * Event handler when the user wants to thaw the cell.
+     */
+    handleThawOneCell = (cell) => {
+        // Cell has to be an existing workflow module cell. This should be
+        // ensured by the child component (not validated here).
+        const { dispatch, notebook } = this.props;
+        const url = cell.module.links.get(HATEOAS_MODULE_THAW_ONE)
+        dispatch(freezeOrThawNotebookCell(notebook, url, cell.id))
+    }
+    /**
      * Dispatch a command specification object for a command that the user
      * wants to remove from the list of hidden commands.
      */
@@ -302,6 +347,40 @@ class NotebookPage extends Component {
         const { branch, history, project } = this.props;
         history.push(notebookPageUrl(project.id, branch.id));
     }
+    //Dispatch action to load custom protocol added by psingh46
+    handleEditorCell = (cell,data) => {
+        let url = null;
+        url = cell.module.links.get(HATEOAS_MODULE_REPLACE);
+        url = url.replace('http://','');
+        url = 'x-vizier-client:opencell/'+url;
+        //Fetch the url of the active cell and open agent
+        window.location.href = url;
+    }
+
+    handleInterval = interval => {
+        this.setState({interval});
+        console.log("ibterval at page", interval);
+    }
+
+    handleClearInterval = () => {
+        clearInterval(this.state.interval);
+    }
+
+    handleCloseAgent = (cell, data) => {
+        let url = null;
+        url = cell.module.links.get(HATEOAS_MODULE_REPLACE);
+        url = url.replace('http://','');
+        url = 'x-vizier-client:endcell/'+url;
+        //Fetch the url of the active cell and open agent
+        window.location.href = url;
+    }
+
+    //Dispatch handle to Sync the active cell added by psingh46
+    handleSyncCell = (cell) => {
+        const {notebook, dispatch} = this.props;
+        dispatch(checkModuleStatusForSync(notebook, cell));
+    }
+
     handleSubmitCell = (cell, commandSpec, data, onUpdateProgress) => {
         const { dispatch, notebook, project } = this.props;
         // Create the request object containing the package and command
@@ -459,8 +538,17 @@ class NotebookPage extends Component {
                     onRemoveFilteredCommand={this.handleRemoveFilteredCommand}
                     onSelectNotebookCell={this.handleSelectActiveCell}
                     onSubmitCell={this.handleSubmitCell}
+                    editorHandler={this.handleEditorCell}
+                    handleClearInterval = {this.handleClearInterval}
+                    getIntervalValue={this.handleInterval}
+                    closeAgentHandler={this.handleCloseAgent}
+                    syncHandler={this.handleSyncCell}
                     userSettings={userSettings}
                 	onEditSpreadsheet={this.handleEditSpreadsheet}
+                    onFreezeCell={this.handleFreezeCell}
+                    onFreezeOneCell={this.handleFreezeOneCell}
+                    onThawCell={this.handleThawCell}
+                    onThawOneCell={this.handleThawOneCell}
                 />
             );
             // Add modal form for user to enter branch name when creating a new
@@ -531,6 +619,7 @@ class NotebookPage extends Component {
 	                </div>
 	            );
             }
+            console.log("CancelExec at NotebookPage: " + this.handleCancelWorkflowExec)
             content = (
                 <ResourcePage
                     actionError={actionError}
@@ -544,9 +633,10 @@ class NotebookPage extends Component {
                     onDeleteBranch={this.handleDeleteBranch}
                     onShowNotebook={this.handleShowBranchHead}
                     onSwitchBranch={this.handleSwitchBranch}
+                    onCancelExec={this.handleCancelWorkflowExec}
                     project={project}
                     projectList={projectList}
-                    resource={new NotebookResource()}
+                    resource={NotebookResource()}
                     serviceApi={serviceApi}
                     userSettings={userSettings}
                 />

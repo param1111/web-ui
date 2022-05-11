@@ -21,6 +21,7 @@ import { PropTypes } from 'prop-types';
 import { Icon } from 'semantic-ui-react';
 import { LargeMessageButton } from '../Button'
 import NotebookCell from './NotebookCell';
+import TableOfContents from './TableOfContents';
 import {INSERT_AFTER, INSERT_BEFORE} from '../../resources/Notebook'
 
 /**
@@ -45,6 +46,10 @@ class Notebook extends React.Component {
         onRemoveFilteredCommand: PropTypes.func.isRequired,
         onSubmitCell: PropTypes.func.isRequired,
         onSelectNotebookCell: PropTypes.func.isRequired,
+        onFreezeCell: PropTypes.func.isRequired,
+        onFreezeOneCell: PropTypes.func.isRequired,
+        onThawCell: PropTypes.func.isRequired,
+        onThawOneCell: PropTypes.func.isRequired,
         userSettings: PropTypes.object.isRequired,
         onEditSpreadsheet: PropTypes.func.isRequired
     }
@@ -90,6 +95,7 @@ class Notebook extends React.Component {
             }
         }
     }
+
     /**
      * Reset all recommendations
      */
@@ -123,8 +129,17 @@ class Notebook extends React.Component {
             onRemoveFilteredCommand,
             onSelectNotebookCell,
             onSubmitCell,
+            editorHandler,
+            getIntervalValue,
+            handleClearInterval,
+            closeAgentHandler,
+            syncHandler,
             userSettings,
-            onEditSpreadsheet
+            onEditSpreadsheet,
+            onFreezeCell,
+            onFreezeOneCell,
+            onThawCell,
+            onThawOneCell,
         } = this.props;
         // For empty notebooks a message is shown that contains a button to
         // add the first notebook cell.
@@ -147,6 +162,7 @@ class Notebook extends React.Component {
         let isNewPrevious = false;
         let hasActiveCell = false;
         let datasets = [];
+        let artifacts = [];
         for (let i = 0; i < notebook.cells.length; i++) {
             const cell = notebook.cells[i];
             let isNewNext = false;
@@ -181,6 +197,7 @@ class Notebook extends React.Component {
                     cell={cell}
                     cellNumber={moduleCount}
                     datasets={datasets}
+                    artifacts={artifacts}
                     isActiveCell={cell.id === activeNotebookCell}
                     isNewNext={isNewNext}
                     isNewPrevious={isNewPrevious}
@@ -199,18 +216,37 @@ class Notebook extends React.Component {
                     onRemoveFilteredCommand={onRemoveFilteredCommand}
                     onSelect={onSelectNotebookCell}
                     onSubmitCell={submitHandler}
+                    onOpenInEditor={editorHandler}
+                    handleClearInterval={handleClearInterval}
+                    getIntervalValue={getIntervalValue}
+                    onCloseAgent={closeAgentHandler}
+                    syncHandler={syncHandler}
                     userSettings={userSettings}
                     onEditSpreadsheet={onEditSpreadsheet}
                     onRecommendAction={this.handleRecommendAction}
                     onResetRecommendations={this.handleResetRecommendations}
+                    onFreezeCell={onFreezeCell}
+                    onFreezeOneCell={onFreezeOneCell}
+                    onThawCell={onThawCell}
+                    onThawOneCell={onThawOneCell}
                 />
             );
             if (!cell.isNewCell()) {
                 moduleCount++;
                 datasets = cell.module.datasets;
+                artifacts = cell.module.artifacts;
             }
             isNewPrevious = cell.isNewCell();
         }
+
+        let tableOfContents = null;
+        if("tableOfContents" in notebook.workflow && Array.isArray(notebook.workflow['tableOfContents']) && (notebook.workflow['tableOfContents'].length > 0)) {
+            tableOfContents = (
+                <TableOfContents
+                    contents={notebook.workflow.tableOfContents} />
+            );
+        }
+
         // Show a message button to append a new cell (only if the last cell
         // is not already a new cell and the workflow is not in error state
         // or read only).
@@ -240,6 +276,7 @@ class Notebook extends React.Component {
             notebookCells.reverse();
             content = (
                 <div>
+                    { tableOfContents }
                     { appendCellButton }
                     { notebookCells }
                 </div>
@@ -247,6 +284,7 @@ class Notebook extends React.Component {
         } else {
             content = (
                 <div>
+                    { tableOfContents }
                     { notebookCells }
                     { appendCellButton }
                 </div>

@@ -45,6 +45,7 @@ class CellCommandArea extends React.Component {
     static propTypes = {
         apiEngine: PropTypes.object.isRequired,
         datasets: PropTypes.array.isRequired,
+        artifacts: PropTypes.array.isRequired,
         cell: PropTypes.object.isRequired,
         isActiveCell: PropTypes.bool.isRequired,
         onClick: PropTypes.func.isRequired,
@@ -81,15 +82,23 @@ class CellCommandArea extends React.Component {
                 newLines: ""
             },
             errors: null,
+            interval: null,
             formValues: values,
             hasErrors: false,
             selectedCommand: cell.commandSpec,
             showCommandsListing: (cell.commandSpec == null),
             snippetSelectorVisible: false,
             upstreamFormValues: false,
+            isOpenEditorClicked: localStorage.getItem('openEditorClicked') || false,
             submitted: false
         }
     }
+
+    // componentDidUpdate = (prevProps, prevState) => {
+    //     if(prevState.isOpenEditorClicked ){
+    //         this.handleStateForSync();
+    //     }
+    // }
     /**
      * Set this as the active cell (if it isn't yet). This method is intended
      * when a rebdered code editor receives the focus.
@@ -100,6 +109,10 @@ class CellCommandArea extends React.Component {
             onSelectCell(cell);
         }
     }
+
+
+
+    intervalForSync = null;
     /**
      * Append a code snippet to the current editor value. The code snippet is
      * expected to be a list of strings (code lines).
@@ -239,6 +252,39 @@ class CellCommandArea extends React.Component {
         }
         onResetRecommendations()
     }
+    handleStateForSync = (value) => {
+        localStorage.setItem('openEditorClicked', value)
+        this.setState({
+            isOpenEditorClicked : value
+        });
+        if(!value){
+            localStorage.removeItem('openEditorClicked');
+        }
+    }
+    /** Added by psingh46
+    Dialog box for transferring the data to OS editor */
+    handleOpenInEditor = () => {
+
+        const{cell, onUpdateProgress} = this.props;
+        let {interval} = this.state;
+        this.props.onOpenInEditor(cell,onUpdateProgress);
+        this.handleStateForSync(true);
+        interval = setInterval(() => {
+            this.props.syncHandler(cell);
+        }, 1000);
+        this.setState({interval});
+        this.props.getIntervalValue(interval);
+        //this.props.syncHandler();
+        //this.handleSubmitForm();                
+    }
+
+    handleSyncAction = () => {
+        const{cell, onUpdateProgress} = this.props;
+        this.props.handleClearInterval();
+        this.props.onCloseAgent(cell, onUpdateProgress);
+        this.handleStateForSync(false);
+    }
+
     /**
      * Clear the list of error messages.
      */
@@ -291,6 +337,7 @@ class CellCommandArea extends React.Component {
      */
     handleSubmitForm = () => {
         const { cell, onSubmit, apiEngine, onUpdateProgress } = this.props;
+        console.log(this.props);
         // The onSubmit function may be none if submission is not permitted for
         // an active notebook. Show an alert for the user.
         if (onSubmit == null) {
@@ -348,6 +395,7 @@ class CellCommandArea extends React.Component {
             apiEngine,
             cell,
             datasets,
+            artifacts,
             isActiveCell,
             onClick,
             onSubmit,
@@ -378,6 +426,25 @@ class CellCommandArea extends React.Component {
         let mainContent = null;
         // For code cells with additional parameters
         let additionalParams = null;
+        //Added by psingh46
+        //For code cells a feature to open the exisiting code in a code editor/text
+        let openEditorButton = (
+            <Button
+                content='Open In Editor'
+                icon='file code outline'
+                labelPosition='left'
+                onClick={this.handleOpenInEditor}
+            />
+        );;
+        //For Syncing the values from the editor to the UI
+        let syncWithAgent = (
+            <Button
+            content='Turn Off Sync'
+                icon='exchange'
+                labelPosition='left'
+                onClick={this.handleSyncAction}
+            />
+        );
         // For code cells an additional button is shown to toggle vizibility of
         // a code snippet selector.
         let codeSnippetButton = null;
@@ -451,8 +518,8 @@ class CellCommandArea extends React.Component {
 	                if((isActiveCell) && (paraCode.language === 'sql')) {
 	                	let outputDataset = formValues['output_dataset'];
 	                	additionalParams = (
-	                    		<div class="ui labeled input">
-					                <div class="ui label">
+	                    		<div className="ui labeled input">
+					                <div className="ui label">
 					                	Output Dataset
 					                </div>
 				                    <TextControl
@@ -521,7 +588,8 @@ class CellCommandArea extends React.Component {
 	                            {selectedCommand.name}
 	                        </p>
 	                        <ModuleInputForm
-	                            datasets={datasets}
+                                datasets={datasets}
+                                artifacts={artifacts}
 	                            onChange={this.handleFormValueChange}
 	                            selectedCommand={selectedCommand}
 	                            serviceProperties={apiEngine.serviceProperties}
@@ -572,30 +640,31 @@ class CellCommandArea extends React.Component {
         if ((isActiveCell) && (!showCommandsListing) && (!submitted)) {
             buttons = (
                 <div className='module-form-buttons'>
-                    { codeSnippetButton }
-                    <span className='padding-lg'>
+                    {this.state.isOpenEditorClicked ? syncWithAgent : openEditorButton}
+                    {!this.state.isOpenEditorClicked && codeSnippetButton }
+                    {!this.state.isOpenEditorClicked && <span className='padding-lg'>
                         <Button
                             content='Change Command'
                             icon='wrench'
                             labelPosition='left'
                             onClick={this.handleShowCommandsListing}
                         />
-                    </span>
-                    <Button
+                    </span>}
+                    {!this.state.isOpenEditorClicked && <Button
                         content='Dismiss'
                         icon='close'
                         labelPosition='left'
                         negative
                         onClick={this.handleDismiss}
-                    />
-                    <Button
+                    />}
+                    {!this.state.isOpenEditorClicked && <Button
                         content='Submit'
                         disabled={onSubmit == null}
                         icon='paper plane outline'
                         labelPosition='left'
                         positive
                         onClick={this.handleSubmitForm}
-                    />
+                    />}
                 </div>
             );
         }

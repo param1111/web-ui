@@ -52,6 +52,7 @@ class NotebookCell extends React.Component {
         cell: PropTypes.object.isRequired,
         cellNumber: PropTypes.number.isRequired,
         datasets: PropTypes.array.isRequired,
+        artifacts: PropTypes.array.isRequired,
         isActiveCell: PropTypes.bool.isRequired,
         isNewNext: PropTypes.bool.isRequired,
         isNewPrevious: PropTypes.bool.isRequired,
@@ -73,7 +74,11 @@ class NotebookCell extends React.Component {
         userSettings: PropTypes.object.isRequired,
         onEditSpreadsheet: PropTypes.func.isRequired,
         onRecommendAction: PropTypes.func.isRequired,
-        onResetRecommendations: PropTypes.func.isRequired
+        onResetRecommendations: PropTypes.func.isRequired,
+        onFreezeCell: PropTypes.func.isRequired,
+        onFreezeOneCell: PropTypes.func.isRequired,
+        onThawCell: PropTypes.func.isRequired,
+        onThawOneCell: PropTypes.func.isRequired,
     }
     handleUpdateProgress = p => {
         this.setState({moduleProgress: p})
@@ -158,6 +163,36 @@ class NotebookCell extends React.Component {
         }
     }
     /**
+     * Freeze this and all subsequent cells
+     */
+    handleFreezeCell = () => {
+        const { cell, onFreezeCell } = this.props;
+        onFreezeCell(cell)
+    }
+    /**
+     * Freeze only this cell
+     */
+    handleFreezeOneCell = () => {
+        const { cell, onFreezeOneCell } = this.props;
+        onFreezeOneCell(cell)
+    }
+    /**
+     * Thaw this and all prior cells
+     */
+    handleThawCell = () => {
+        const { cell, onThawCell } = this.props;
+        onThawCell(cell)
+    }
+    /**
+     * Thaw only this cell
+     */
+    handleThawOneCell = () => {
+        const { cell, onThawOneCell } = this.props;
+        onThawOneCell(cell)
+    }
+
+
+    /**
      * Handle new cell recommendations
      */
     handleRecommendAction = (packageId, commandId) => {
@@ -170,6 +205,7 @@ class NotebookCell extends React.Component {
             cell,
             cellNumber,
             datasets,
+            artifacts,
             isActiveCell,
             isNewNext,
             isNewPrevious,
@@ -180,6 +216,11 @@ class NotebookCell extends React.Component {
             onFetchAnnotations,
             onOutputSelect,
             onSubmitCell,
+            onOpenInEditor,
+            handleClearInterval,
+            getIntervalValue,
+            onCloseAgent,
+            syncHandler,
             userSettings,
             onEditSpreadsheet,
             onResetRecommendations
@@ -252,6 +293,10 @@ class NotebookCell extends React.Component {
                     onDeleteCell={this.handleDeleteCell}
                     onInsertCell={this.handleInsertCell}
                     onSelectCell={this.handleSelectCell}
+                    onFreezeCell={this.handleFreezeCell}
+                    onFreezeOneCell={this.handleFreezeOneCell}
+                    onThawCell={this.handleThawCell}
+                    onThawOneCell={this.handleThawOneCell}
                 />
             );
             outputArea = (
@@ -275,12 +320,18 @@ class NotebookCell extends React.Component {
             <CellCommandArea
                 apiEngine={apiEngine}
                 datasets={datasets}
+                artifacts={artifacts}
                 cell={cell}
                 isActiveCell={(isActiveCell) && (!notebook.readOnly)}
                 onClick={this.handleSelectCell}
                 onDismiss={onDismissCell}
                 onSelectCell={this.handleSelectCell}
                 onSubmit={onSubmitCell}
+                onOpenInEditor={onOpenInEditor}
+                handleClearInterval={handleClearInterval}
+                getIntervalValue={getIntervalValue}
+                onCloseAgent={onCloseAgent}
+                syncHandler={syncHandler}
                 userSettings={userSettings}
                 onResetRecommendations={onResetRecommendations}
                 onUpdateProgress={this.handleUpdateProgress}
@@ -297,13 +348,17 @@ class NotebookCell extends React.Component {
             cssState = ' running-cell';
         } else if (cell.isPending()) {
             cssState = ' pending-cell';
+        } else if (cell.isFrozen()) {
+            cssState = ' frozen-cell';
         }
         return (
             <ProgressContext.Provider value={this.state}>
                 <table className={css + cssState}><tbody>
                 <tr>
                     <td className={'cell-index' + cssState} onClick={this.handleSelectCell}>
-                        <p className={'cell-index' + cssState}>[{cellIndex}]</p>
+                        <a id={"cell-"+cellIndex} >
+                            <p className={'cell-index' + cssState}>[{cellIndex}]</p>
+                        </a>
                         { cellMenu }
                     </td>
                     <td className={'cell-area' + cssState}>

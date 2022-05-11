@@ -130,7 +130,10 @@ export const checkModuleStatus = (notebook, cell) => (dispatch) => (
     ).then(
         json => {
             if (json.state !== cell.module.state) {
-                return fetchAuthed(notebook.workflow.links.get(HATEOAS_BRANCH_HEAD))(dispatch).then(
+            	//TODO: hurry up and tell the interval to die in your render loop, react.  
+            	//  Nevermind; hacking for now.  FIXIT: soon
+            	clearInterval(window.pollingTimer);
+            	return fetchAuthed(notebook.workflow.links.get(HATEOAS_BRANCH_HEAD))(dispatch).then(
                     response => getJson(response, 200),
                     error => dispatch(serviceError(error.message))
                 ).then(
@@ -140,6 +143,49 @@ export const checkModuleStatus = (notebook, cell) => (dispatch) => (
             }
         },
         error => dispatch(setNotebookCellError(notebook, cell.module, 'module status', error.message))
+    )
+)
+
+export const checkModuleStatusForSync = (notebook, cell) => (dispatch) => (
+
+    fetchAuthed(notebook.workflow.links.get(HATEOAS_BRANCH_HEAD))(dispatch).then(
+        response => getJson(response, 200),
+        error => dispatch(serviceError(error.message))
+    ).then(
+        json => {
+            fetchAuthed(json.links && json.links[0].href)(dispatch).then(
+                response => getJson(response, 200),
+                error => dispatch(serviceError(error.message))
+            ).then(                
+                            json => (dispatch(updateNotebook(notebook, json, cell.id))),
+                            error => dispatch(workflowFetchError(error.message))
+                        )
+                    }
+                
+            
+
+        
+    //     fetchAuthed(response.links && response.links[0].href)(dispatch).then(
+    //     response1 => getJson(response1, 200),
+    //     error => dispatch(serviceError(error.message))
+    // ).then(
+    //     json => {
+    //         if (json.state !== cell.module.state) {
+    //         	//TODO: hurry up and tell the interval to die in your render loop, react.  
+    //         	//  Nevermind; hacking for now.  FIXIT: soon
+    //         	clearInterval(window.pollingTimer);
+    //         	return fetchAuthed(notebook.workflow.links.get(HATEOAS_BRANCH_HEAD))(dispatch).then(
+    //                 response => getJson(response, 200),
+    //                 error => dispatch(serviceError(error.message))
+    //             ).then(
+    //                 json => (dispatch(updateNotebook(notebook, json, cell.id))),
+    //                 error => dispatch(workflowFetchError(error.message))
+    //             )
+    //         }
+    //     },
+    //     error => dispatch(setNotebookCellError(notebook, cell.module, 'module status', error.message))
+    // )
+        
     )
 )
 
@@ -525,6 +571,14 @@ export const insertNotebookCell = (notebook, url, data, modifiedCellId) => (disp
  */
 export const replaceNotebookCell = (notebook, url, data, modifiedCellId) => (dispatch) => {
     return dispatch(updateNotebookCell(notebook, url, 'PUT', data, modifiedCellId));
+}
+
+
+/**
+ * Freeze a specified cell in the notebook an d its successors.
+ */
+export const freezeOrThawNotebookCell = (notebook, url, modifiedCellId) => (dispatch) => {
+    dispatch(updateNotebookCell(notebook, url, 'POST', {}, modifiedCellId));
 }
 
 
